@@ -1,10 +1,14 @@
-import React, { useState } from "react";
+// src/App.js
+
+import React, { useState, useEffect, useRef } from "react"; // <-- Import useRef
+import "./App.css";
 import AlgorithmSelector from "./components/AlgorithmSelector";
 import TaskInputForm from "./components/TaskInputForm";
-import TaskTable from "./components/TaskTable";
+import LiveInputTable from "./components/LiveInputTable";
 import GanttChart from "./components/GanttChart";
 import MetricsSummary from "./components/MetricsSummary";
-import LiveInputTable from "./components/LiveInputTable";
+import ResultsTable from "./components/ResultsTable";
+import LearnMore from "./components/LearnMore";
 import {
   fcfs,
   sjf,
@@ -14,95 +18,199 @@ import {
   lrtf,
   srtf,
   multilevelQueue,
+  mlfq,
 } from "./utils/schedulingAlgorithms";
 
 function App() {
   const [algorithm, setAlgorithm] = useState("FCFS");
   const [tasks, setTasks] = useState([]);
+  const [editingTask, setEditingTask] = useState(null);
   const [quantum, setQuantum] = useState(2);
   const [run, setRun] = useState(false);
-  const [scheduledTasks, setScheduledTasks] = useState([]);
+  const [ganttTasks, setGanttTasks] = useState([]);
+  const [processedTasks, setProcessedTasks] = useState([]);
+
+  // --- Dynamic Height Logic ---
+  const leftColumnRef = useRef(null); // Ref for the left column
+  const taskQueueCardRef = useRef(null); // Ref for the task queue card
+
+  useEffect(() => {
+    // This function syncs the height of the task queue with the left column
+    const syncHeights = () => {
+      if (leftColumnRef.current && taskQueueCardRef.current) {
+        const leftColumnHeight = leftColumnRef.current.offsetHeight;
+        taskQueueCardRef.current.style.maxHeight = `${leftColumnHeight}px`;
+        // Also make the card itself a flex container to manage its children's heights
+        taskQueueCardRef.current.style.display = "flex";
+        taskQueueCardRef.current.style.flexDirection = "column";
+      }
+    };
+
+    syncHeights(); // Sync on initial render and when tasks change
+    // Optional: Add a resize listener for responsive adjustments
+    window.addEventListener("resize", syncHeights);
+    return () => window.removeEventListener("resize", syncHeights);
+  }, [tasks]); // Rerun this effect whenever the tasks list changes
+
+  // --- Scheduling Logic (unchanged) ---
+  const calculateMetricsForPreemptive = (originalTasks, timeSlices) => {
+    return originalTasks
+      .map((task) => {
+        const relevantSlices = timeSlices.filter(
+          (slice) => slice.id === task.id
+        );
+        if (relevantSlices.length === 0) return task;
+        const startTime = relevantSlices[0].startTime;
+        const completionTime =
+          relevantSlices[relevantSlices.length - 1].endTime;
+        const turnaroundTime = completionTime - task.arrivalTime;
+        const waitingTime = turnaroundTime - task.burstTime;
+        const responseTime = startTime - task.arrivalTime;
+        return {
+          ...task,
+          startTime,
+          completionTime,
+          turnaroundTime,
+          waitingTime,
+          responseTime,
+        };
+      })
+      .sort((a, b) => a.id - b.id);
+  };
 
   const runScheduling = () => {
-    let result = [];
+    const tasksCopy = JSON.parse(JSON.stringify(tasks));
+    let resultSlices = [];
+    let finalTasks = [];
+    const PREEMPTIVE_ALGORITHMS = ["RRS", "SRTF", "LRTF", "MLQ", "MLFQ"];
     switch (algorithm) {
       case "FCFS":
-        result = fcfs(tasks);
+        resultSlices = fcfs(tasksCopy);
         break;
       case "SJF":
-        result = sjf(tasks);
+        resultSlices = sjf(tasksCopy);
         break;
       case "RRS":
-        result = rrs(tasks, quantum);
+        resultSlices = rrs(tasksCopy, quantum);
         break;
       case "LJF":
-        result = ljf(tasks);
+        resultSlices = ljf(tasksCopy);
         break;
       case "PRIORITY":
-        result = priorityScheduling(tasks);
+        resultSlices = priorityScheduling(tasksCopy);
         break;
       case "LRTF":
-        result = lrtf(tasks);
+        resultSlices = lrtf(tasksCopy);
         break;
       case "SRTF":
-        result = srtf(tasks);
+        resultSlices = srtf(tasksCopy);
         break;
       case "MLQ":
-        result = multilevelQueue(tasks);
+        resultSlices = multilevelQueue(tasksCopy);
+        break;
+      case "MLFQ":
+        resultSlices = mlfq(tasksCopy);
         break;
       default:
-        result = tasks;
+        resultSlices = tasksCopy;
     }
-    setScheduledTasks(result);
+    if (PREEMPTIVE_ALGORITHMS.includes(algorithm)) {
+      finalTasks = calculateMetricsForPreemptive(tasksCopy, resultSlices);
+    } else {
+      finalTasks = resultSlices;
+    }
+    setGanttTasks(resultSlices);
+    setProcessedTasks(finalTasks);
     setRun(true);
   };
 
-  // Optional: clear run flag if algorithm or tasks change so user knows to run again
-  React.useEffect(() => {
+  useEffect(() => {
     setRun(false);
   }, [algorithm, tasks, quantum]);
 
+  const handleDelete = (id) => {
+    setTasks(tasks.filter((task) => task.id !== id));
+    if (editingTask && editingTask.id === id) setEditingTask(null);
+  };
+
+  const handleClearAll = () => {
+    setTasks([]);
+    setEditingTask(null);
+    setGanttTasks([]);
+    setProcessedTasks([]);
+    setRun(false);
+  };
+
   return (
-    <div style={{ padding: 20, fontFamily: "Arial" }}>
-      <h1 style={{ fontSize: 28, fontWeight: "bold" }}>
-        OS Scheduling Visualizer
-      </h1>
+    <div className="app-container">
+      <header className="app-header">
+        <h1>OS Scheduling Visualizer</h1>
+        <p>Visualize and compare CPU scheduling algorithms in real-time.</p>
+      </header>
 
-      <AlgorithmSelector selected={algorithm} onChange={setAlgorithm} />
-
-      {algorithm === "RRS" && (
-        <div className="my-4">
-          <label className="block mb-2 font-medium">Time Quantum:</label>
-          <input
-            type="number"
-            className="border p-2 rounded"
-            min="1"
-            value={quantum}
-            onChange={(e) => setQuantum(Number(e.target.value))}
-          />
+      <main className="main-grid">
+        {/* Add the ref to the left column */}
+        <div ref={leftColumnRef} className="grid-col-span-1 column-container">
+          <div className="card">
+            <AlgorithmSelector selected={algorithm} onChange={setAlgorithm} />
+            {algorithm === "RRS" && (
+              <div style={{ marginTop: "1rem" }}>
+                <label htmlFor="time-quantum" className="form-label">
+                  Time Quantum:
+                </label>
+                <input
+                  id="time-quantum"
+                  type="number"
+                  className="form-input"
+                  min="1"
+                  value={quantum}
+                  onChange={(e) => setQuantum(Number(e.target.value))}
+                />
+              </div>
+            )}
+          </div>
+          <div className="card">
+            <TaskInputForm
+              tasks={tasks}
+              setTasks={setTasks}
+              algorithm={algorithm}
+              editingTask={editingTask}
+              setEditingTask={setEditingTask}
+            />
+          </div>
+          <LearnMore algorithm={algorithm} />
         </div>
-      )}
 
-      <TaskInputForm tasks={tasks} setTasks={setTasks} algorithm={algorithm} />
-
-      <LiveInputTable tasks={tasks} />
-
-      <button
-        className="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded"
-        onClick={runScheduling}
-      >
-        Run Scheduling
-      </button>
+        <div className="grid-col-span-2 column-container">
+          {/* Add the ref to the task queue card */}
+          <div ref={taskQueueCardRef} className="card">
+            <LiveInputTable
+              tasks={tasks}
+              onEdit={setEditingTask}
+              onDelete={handleDelete}
+              onClearAll={handleClearAll}
+            />
+            {tasks.length > 0 && (
+              <button
+                className="btn btn-primary"
+                style={{ marginTop: "1.5rem", flexShrink: 0 }}
+                onClick={runScheduling}
+              >
+                Run Scheduling Algorithm
+              </button>
+            )}
+          </div>
+        </div>
+      </main>
 
       {run && (
-        <>
-          <TaskTable tasks={scheduledTasks} />
-          <GanttChart tasks={scheduledTasks} algorithm={algorithm} />
-          <MetricsSummary tasks={scheduledTasks} algorithm={algorithm} />
-        </>
+        <div className="card" style={{ marginTop: "2rem" }}>
+          <GanttChart tasks={ganttTasks} />
+          <ResultsTable tasks={processedTasks} />
+          <MetricsSummary tasks={processedTasks} algorithm={algorithm} />
+        </div>
       )}
     </div>
   );
 }
-
 export default App;

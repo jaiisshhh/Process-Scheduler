@@ -11,19 +11,25 @@ function GanttChart({ tasks }) {
 
   // Colors per queue level
   const queueColors = [
-    "#4f46e5", // Level 0 - Indigo
-    "#16a34a", // Level 1 - Green
-    "#f59e0b", // Level 2 - Amber
-    "#dc2626", // Level 3 - Red
-    "#0ea5e9", // Level 4 - Sky
-    "#db2777", // Level 5 - Pink
-    "#14b8a6", // Level 6 - Teal
+    "#7c3aed", // Level 0 - Violet
+    "#059669", // Level 1 - Emerald
+    "#ea580c", // Level 2 - Orange
+    "#e11d48", // Level 3 - Rose
+    "#2563eb", // Level 4 - Blue
+    "#7c2d12", // Level 5 - Brown
+    "#0891b2", // Level 6 - Cyan
   ];
 
   // Fallback color mapping per task ID
   const fallbackColors = {};
   const fallbackBase = [
-    "#4f46e5", "#16a34a", "#dc2626", "#db2777", "#f59e0b", "#0ea5e9", "#14b8a6"
+    "#7c3aed",
+    "#059669",
+    "#ea580c",
+    "#e11d48",
+    "#2563eb",
+    "#7c2d12",
+    "#0891b2",
   ];
   let colorIndex = 0;
 
@@ -81,7 +87,9 @@ function GanttChart({ tasks }) {
             return (
               <div
                 key={idx}
-                title={`P${id}: ${s} - ${e}${task.queueLevel !== undefined ? ` | Q${task.queueLevel}` : ""}`}
+                title={`P${id}: ${s} - ${e}${
+                  task.queueLevel !== undefined ? ` | Q${task.queueLevel}` : ""
+                }`}
                 style={{
                   position: "absolute",
                   left: `${left}%`,

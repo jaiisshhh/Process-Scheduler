@@ -393,17 +393,17 @@ export function srtf(tasks) {
 
 // MLQ : Multi Level Queue
 export function multilevelQueue(tasks) {
-  const q0 = tasks.filter(t => t.queueLevel === 0);
-  const q1 = tasks.filter(t => t.queueLevel === 1);
+  const q0 = tasks.filter((t) => t.queueLevel === 0);
+  const q1 = tasks.filter((t) => t.queueLevel === 1);
 
   // Run Q0 tasks first (high priority queue)
   const q0Scheduled = rrs(q0, 2);
 
   // Compute the end time of the last task in Q0
-  const q0EndTime = q0Scheduled.reduce((max, t) => Math.max(max, t.end), 0);
+  const q0EndTime = q0Scheduled.reduce((max, t) => Math.max(max, t.endTime), 0);
 
   // Shift Q1 tasks to start after Q0
-  const shiftedQ1 = q1.map(task => ({
+  const shiftedQ1 = q1.map((task) => ({
     ...task,
     arrivalTime: Math.max(task.arrivalTime, q0EndTime),
   }));
@@ -414,4 +414,98 @@ export function multilevelQueue(tasks) {
   return [...q0Scheduled, ...q1Scheduled];
 }
 
+// MLFQ: Multilevel Feedback Queue
+// MLFQ: Multilevel Feedback Queue
+export function mlfq(tasks) {
+  if (!tasks.length) return [];
 
+  const quantum = [4, 8, Infinity]; // Q0: RR-4, Q1: RR-8, Q2: FCFS
+
+  const readyQueue = tasks
+    .map((task) => ({
+      ...task,
+      remainingTime: task.burstTime,
+      currentQueue: 0,
+    }))
+    .sort((a, b) => a.arrivalTime - b.arrivalTime);
+
+  const result = [];
+  let time = 0;
+  let taskIndex = 0;
+
+  const queues = [[], [], []];
+
+  const addNewlyArrivedTasks = () => {
+    while (
+      taskIndex < readyQueue.length &&
+      readyQueue[taskIndex].arrivalTime <= time
+    ) {
+      queues[0].push(readyQueue[taskIndex]);
+      taskIndex++;
+    }
+  };
+
+  addNewlyArrivedTasks();
+
+  while (queues[0].length > 0 || queues[1].length > 0 || queues[2].length > 0) {
+    let currentTask = null;
+    let currentQueueIndex = -1;
+
+    for (let i = 0; i < 3; i++) {
+      if (queues[i].length > 0) {
+        currentTask = queues[i].shift();
+        currentQueueIndex = i;
+        break;
+      }
+    }
+
+    if (!currentTask) {
+      time++;
+      addNewlyArrivedTasks();
+      continue;
+    }
+
+    const execTime = Math.min(
+      currentTask.remainingTime,
+      quantum[currentQueueIndex]
+    );
+
+    result.push({
+      id: currentTask.id,
+      startTime: time,
+      endTime: time + execTime,
+    });
+
+    currentTask.remainingTime -= execTime;
+    time += execTime;
+
+    addNewlyArrivedTasks();
+
+    if (currentTask.remainingTime > 0) {
+      const nextQueue = Math.min(2, currentQueueIndex + 1);
+      queues[nextQueue].push(currentTask);
+    }
+  }
+  // Final processing to add metrics
+  const finalResult = tasks.map((originalTask) => {
+    const taskIntervals = result.filter((r) => r.id === originalTask.id);
+    if (taskIntervals.length === 0) return originalTask;
+
+    const startTime = taskIntervals[0].startTime;
+    const completionTime = taskIntervals[taskIntervals.length - 1].endTime;
+    const turnaroundTime = completionTime - originalTask.arrivalTime;
+    const waitingTime = turnaroundTime - originalTask.burstTime;
+    const responseTime = startTime - originalTask.arrivalTime;
+
+    return {
+      ...originalTask,
+      startTime,
+      completionTime,
+      turnaroundTime,
+      waitingTime,
+      responseTime,
+    };
+  });
+
+  return finalResult.sort((a, b) => a.id - b.id);
+}

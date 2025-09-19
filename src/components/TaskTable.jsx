@@ -1,7 +1,11 @@
 import React from "react";
 
-function TaskTable({ tasks }) {
+function TaskTable({ tasks, setTasks }) {
   if (!tasks || tasks.length === 0) return null;
+
+  const handleDelete = (id) => {
+    setTasks((prevTasks) => prevTasks.filter((task) => task.id !== id));
+  };
 
   return (
     <table className="w-full mt-6 border">
@@ -15,6 +19,7 @@ function TaskTable({ tasks }) {
           <th className="border px-2">TAT</th>
           <th className="border px-2">Waiting</th>
           <th className="border px-2">Response</th>
+          <th className="border px-2">Action</th>
         </tr>
       </thead>
       <tbody>
@@ -28,6 +33,14 @@ function TaskTable({ tasks }) {
             <td className="border px-2">{task.turnaroundTime ?? "-"}</td>
             <td className="border px-2">{task.waitingTime ?? "-"}</td>
             <td className="border px-2">{task.responseTime ?? "-"}</td>
+            <td className="border px-2">
+              <button
+                onClick={() => handleDelete(task.id)}
+                className="bg-red-600 text-white px-2 py-1 rounded"
+              >
+                Delete
+              </button>
+            </td>
           </tr>
         ))}
       </tbody>
