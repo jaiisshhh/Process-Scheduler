@@ -33,6 +33,7 @@ function App() {
   // --- Dynamic Height Logic ---
   const leftColumnRef = useRef(null); // Ref for the left column
   const taskQueueCardRef = useRef(null); // Ref for the task queue card
+  const resultsRef = useRef(null); // <-- NEW: Ref for the results section
 
   useEffect(() => {
     // This function syncs the height of the task queue with the left column
@@ -51,6 +52,15 @@ function App() {
     window.addEventListener("resize", syncHeights);
     return () => window.removeEventListener("resize", syncHeights);
   }, [tasks]); // Rerun this effect whenever the tasks list changes
+
+  // --- Scroll to Results Logic ---
+  // This effect runs when 'run' state changes
+  useEffect(() => {
+    if (run && resultsRef.current) {
+      // If we just ran the scheduler and the results section exists
+      resultsRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [run]); // Dependency: only run this when 'run' changes
 
   // --- Scheduling Logic (unchanged) ---
   const calculateMetricsForPreemptive = (originalTasks, timeSlices) => {
@@ -76,6 +86,21 @@ function App() {
         };
       })
       .sort((a, b) => a.id - b.id);
+  };
+
+  // Handler to check for "Coming Soon" algorithms
+  const handleAlgorithmChange = (newAlgorithm) => {
+    const comingSoonAlgos = ["PRIORITY", "MLQ", "MLFQ"];
+
+    if (comingSoonAlgos.includes(newAlgorithm)) {
+      alert(
+        "Coming Soon! 🚀\n\nThis feature is under active development. We'll release it as soon as it's ready!"
+      );
+      // By not calling setAlgorithm, the selection in the dropdown will
+      // automatically revert to the previous 'algorithm' state.
+    } else {
+      setAlgorithm(newAlgorithm);
+    }
   };
 
   const runScheduling = () => {
@@ -152,7 +177,10 @@ function App() {
         {/* Add the ref to the left column */}
         <div ref={leftColumnRef} className="grid-col-span-1 column-container">
           <div className="card">
-            <AlgorithmSelector selected={algorithm} onChange={setAlgorithm} />
+            <AlgorithmSelector
+              selected={algorithm}
+              onChange={handleAlgorithmChange}
+            />
             {algorithm === "RRS" && (
               <div style={{ marginTop: "1rem" }}>
                 <label htmlFor="time-quantum" className="form-label">
@@ -204,7 +232,7 @@ function App() {
       </main>
 
       {run && (
-        <div className="card" style={{ marginTop: "2rem" }}>
+        <div ref={resultsRef} className="card" style={{ marginTop: "2rem" }}>
           <GanttChart tasks={ganttTasks} />
           <ResultsTable tasks={processedTasks} />
           <MetricsSummary tasks={processedTasks} algorithm={algorithm} />
